@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import {Cinematic,effectRegion} from './dist/cinematic.mjs';
+import {EffectCache,GLOWS} from './dist/effect-cache.mjs';
+let created=0,gradients=0;const calls=[];
+const makeContext=()=>({setTransform(){},clearRect(){},fillRect(){},createRadialGradient(){gradients++;return{addColorStop(){}}},drawImage(source,...a){assert(a.every(Number.isFinite));calls.push({source,a})},save(){},restore(){}});
+globalThis.document={createElement(){created++;return{width:1,height:1,getContext:makeContext}}};
+const fx=new Cinematic(),target=makeContext();fx.begin(1280,720);fx.composite(target,fx.layer,{region:effectRegion(1280,720,640,360,160)});const reduced=fx.stats.blurPixels,full=fx.stats.fullPixels;assert(reduced<full*.4,'blur work is actually confined to ROI');const allocations=created;
+for(const [x,y]of[[0,0],[1279,719],[-60,350],[640,360]]){const region=effectRegion(1280,720,x,y,160);assert(region.x>=0&&region.y>=0&&region.x+region.w<=1280&&region.y+region.h<=720);fx.begin(1280,720);fx.composite(target,fx.layer,{region})}assert.equal(created,allocations,'moving ROI reuses buffers');assert.equal(effectRegion(1280,720,-1000,-1000,10),null);fx.composite(target,fx.layer,{region:null});assert.equal(fx.stats.blurPixels,0);fx.composite(target);assert.equal(fx.stats.blurPixels,full,'full-screen particle phase stays full screen');
+const cache=new EffectCache(3);for(let i=0;i<120;i++)for(const key of ['cube','aura','heart'])cache.draw(target,key,300,200,100,GLOWS[key]);assert.equal(cache.builds,3);assert.equal(cache.items.size,3);assert.equal(gradients,3);cache.draw(target,'extra',100,100,40,GLOWS.cube);assert.equal(cache.items.size,3,'cache remains bounded');delete globalThis.document;
+console.log(`PASS: representative ROI blur pixels ${reduced}/${full} (${Math.round((1-reduced/full)*100)}% less area), edge clamping, full-screen burst, zero per-frame texture rebuilds, bounded cache`);

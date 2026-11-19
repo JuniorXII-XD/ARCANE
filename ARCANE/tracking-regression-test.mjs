@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import {HandRouter,SpellState} from './dist/logic.mjs';
+import {assessHand} from './dist/hand-analysis.mjs';
+import {trackingFrame,resultTimeout} from './dist/tracking-frame.mjs';
+const lm=Array.from({length:21},()=>({x:.5,y:.8,z:0,visibility:0,presence:0}));lm[0]={...lm[0],x:.5,y:.9};for(const [i,b]of[5,9,13,17].entries()){lm[b]={...lm[b],x:.4+i*.07,y:.7};lm[b+1]={...lm[b+1],x:.4+i*.07,y:.6};lm[b+3]={...lm[b+3],x:.4+i*.07,y:i===0?.3:.76}}lm[4]={...lm[4],x:.39,y:.3};
+const badWorld=Array.from({length:21},()=>({x:0,y:0,z:0}));assert(assessHand(lm,badWorld,1280,720).commands);assert(trackingFrame(450).commands);assert(trackingFrame(1200).usable);assert(!trackingFrame(1200).commands);assert(!trackingFrame(1800).usable);assert(resultTimeout(450)>450);
+const router=new HandRouter(),spell=new SpellState(),result={landmarks:[lm],worldLandmarks:[badWorld],handedness:[[{categoryName:'Left',score:.98}]]};
+for(let now=0;now<=1800;now+=450){const hands=router.update(result,now,false,1280,720);spell.update(hands.Right?.lm,null,now,1280,720,{rightWorld:hands.Right?.world,rightQuality:hands.Right?.quality,rightPresent:!!router.feedback.Right})}assert(spell.on,'slow but fresh frames + absent per-point confidence + unusable world still summon');assert.equal(spell.shape,'cube');
+const uncertain=new HandRouter();uncertain.update({...result,handedness:[[{categoryName:'Left',score:.6}]]},0,false,1280,720);const seen=uncertain.update({...result,handedness:[[{categoryName:'Left',score:.6}]]},200,false,1280,720);assert(uncertain.feedback.Right,'visible low-confidence hand must not disappear');assert(seen.Right&&!seen.Right.quality.commands,'presence must not bypass identity safety');
+console.log('PASS: visible hands with zero optional confidence, bad 3D fallback, 450ms inference cadence, low-confidence presence, stale command gate');

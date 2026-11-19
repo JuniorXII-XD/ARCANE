@@ -1,0 +1,6 @@
+import assert from 'node:assert/strict';
+import {Cinematic} from './dist/cinematic.mjs';
+const sources=[];let made=0;
+const makeContext=()=>({setTransform(...v){assert(v.every(Number.isFinite))},clearRect(){},drawImage(source,...v){assert(v.every(Number.isFinite));sources.push(source)},save(){this.saved={filter:this.filter,globalAlpha:this.globalAlpha,globalCompositeOperation:this.globalCompositeOperation}},restore(){Object.assign(this,this.saved)}});
+globalThis.document={createElement(){made++;return{width:1,height:1,getContext:makeContext}}};
+const fx=new Cinematic(),target=makeContext();fx.begin(390,700,1.25);assert.equal(fx.layer.width,488);assert.equal(fx.layer.height,875);assert.equal(fx.blur.width,176);fx.composite(target);assert(sources.every(x=>x===fx.layer||x===fx.blur));assert.equal(target.filter,undefined);fx.begin(390,700,1.25);assert.equal(made,2,'reuse effect buffers');fx.begin(700,390,1.25);assert.equal(fx.layer.height,488);const gpu={width:1400,height:780};fx.composite(target,gpu,{base:false});assert(sources.includes(gpu));assert.equal(target.globalCompositeOperation,undefined);delete globalThis.document;console.log('PASS: transparent bloom sources, reusable bounded buffers, resize and context restoration');
